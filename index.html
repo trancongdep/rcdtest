@@ -14,8 +14,9 @@
         body {
             font-family: 'Inter', sans-serif;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            /* THAY ĐỔI: Chuyển sang flex-direction column */
+            flex-direction: column; 
+            /* Xóa align-items và justify-content để footer hoạt động */
         }
         /* Style cho kết quả */
         #result.zone-green { background-color: #90ee90; color: #003300; }
@@ -30,16 +31,20 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 p-4">
+<!-- THAY ĐỔI: Xóa p-4, thêm flex flex-col min-h-screen -->
+<body class="bg-gray-100 flex flex-col min-h-screen">
 
-    <!-- Thẻ div chính với lề tự động và chiều rộng tối đa -->
-    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto">
-        <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
-            Kiểm tra Vùng làm việc của RCD
-        </h1>
-        <p class="text-center text-gray-600 mb-8">
-            Nhập dòng điện (trục hoành) và thời gian (trục tung) để xem điểm giao nhau trên biểu đồ.
-        </p>
+    <!-- THÊM: Wrapper <main> để căn giữa nội dung và đẩy footer xuống -->
+    <main class="flex-grow flex items-center justify-center p-4">
+        <!-- Thẻ div chính với lề tự động và chiều rộng tối đa -->
+        <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto">
+            <!-- SỬA LỖI: Sửa lại cấu trúc H1 và P bị lỗi -->
+            <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
+                Kiểm tra vùng làm việc của RCD
+            </h1>
+            <p class="text-center text-gray-600 mb-8">
+                Nhập dòng điện (trục hoành) và thời gian (trục tung) để xem điểm giao nhau trên biểu đồ.
+            </p>
 
         <!-- Thay đổi từ lg:grid-cols-2 thành md:grid-cols-2 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
@@ -94,6 +99,12 @@
             </div>
         </div>
     </div>
+    </main> <!-- THÊM: Đóng thẻ main wrapper -->
+
+    <!-- THÊM: Footer mới -->
+    <footer class="bg-blue-700 text-yellow-300 text-center p-4 w-full">
+        Cần kiểm tra RCD hãy liên hệ tác giả: Trần Công Đẹp - 0963292882
+    </footer>
 
     <script>
         // Định nghĩa các hằng số cho đường biên
