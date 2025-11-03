@@ -8,19 +8,32 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Sử dụng font Inter */
+        html, body {
+            height: 100%;
+        }
         body {
             font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         /* Style cho kết quả */
         #result.zone-green { background-color: #90ee90; color: #003300; }
         #result.zone-yellow { background-color: #f0e68c; color: #554a00; }
         #result.zone-blue { background-color: #a0d8f0; color: #002a40; }
         #result.zone-red { background-color: #ffb6c1; color: #5c000e; }
+        
+        /* Đảm bảo canvas co giãn mà không làm hỏng bố cục */
+        canvas {
+            display: block;
+            touch-action: none;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+<body class="bg-gray-100 p-4">
 
-    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-5xl">
+    <!-- Thẻ div chính với lề tự động và chiều rộng tối đa -->
+    <div class="bg-white p-6 sm:p-8 rounded-2xl shadow-xl w-full max-w-5xl mx-auto">
         <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
             Kiểm tra Vùng làm việc của RCD
         </h1>
@@ -28,7 +41,8 @@
             Nhập dòng điện (trục hoành) và thời gian (trục tung) để xem điểm giao nhau trên biểu đồ.
         </p>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Thay đổi từ lg:grid-cols-2 thành md:grid-cols-2 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             
             <!-- Bảng điều khiển nhập liệu -->
             <div class="space-y-6">
@@ -72,17 +86,17 @@
                 </div>
             </div>
 
-            <!-- Biểu đồ Canvas -->
-            <div class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-                <canvas id="chartCanvas" width="500" height="500"></canvas>
+            <!-- Biểu đồ Canvas (Thay đổi) -->
+            <!-- Thêm w-full max-w-lg mx-auto md:max-w-none để kiểm soát kích thước trên di động -->
+            <div class="bg-gray-50 border border-gray-200 rounded-lg overflow-hidden w-full max-w-lg mx-auto md:max-w-none">
+                <!-- Xóa width/height, dùng class để responsive -->
+                <canvas id="chartCanvas" class="w-full aspect-square"></canvas>
             </div>
         </div>
     </div>
 
     <script>
         // Định nghĩa các hằng số cho đường biên
-        // Dựa trên phân tích biểu đồ log-log, đường biên AC-2/AC-3 xấp xỉ:
-        // log10(T_ms) = -1.7 * log10(I_mA) + 5.0
         const BOUNDARY_SLOPE = -1.7;
         const BOUNDARY_INTERCEPT = 5.0;
         const AC1_LIMIT_MA = 0.5; // 500 µA
@@ -90,10 +104,19 @@
         // Thiết lập canvas
         const canvas = document.getElementById('chartCanvas');
         const ctx = canvas.getContext('2d');
+
+        // *** THAY ĐỔI QUAN TRỌNG ***
+        // Đặt độ phân giải BÊN TRONG (buffer) của canvas.
+        // CSS sẽ tự động co giãn kích thước HIỂN THỊ của canvas này.
+        // Sử dụng 1000x1000 để có độ sắc nét cao (tốt cho retina).
+        canvas.width = 1000;
+        canvas.height = 1000;
+
+        // Các biến này giờ sẽ là 1000, không phải 500
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
 
-        // Giới hạn biểu đồ (logarithmic)
+        // Giới hạn biểu đồ (logarithmic) - không đổi
         const I_MIN_MA = 0.1; // 100 µA
         const I_MAX_MA = 10000; // 10 A
         const T_MIN_MS = 1; // 1 ms
@@ -104,7 +127,7 @@
         const LOG_T_MIN = Math.log10(T_MIN_MS);
         const LOG_T_MAX = Math.log10(T_MAX_MS);
 
-        // Hàm chuyển đổi giá trị sang tọa độ canvas (Logarithmic)
+        // Hàm chuyển đổi giá trị sang tọa độ canvas (Logarithmic) - không đổi
         function mapLogX(i_mA) {
             const logI = Math.log10(Math.max(I_MIN_MA, Math.min(I_MAX_MA, i_mA)));
             return ((logI - LOG_I_MIN) / (LOG_I_MAX - LOG_I_MIN)) * canvasWidth;
@@ -120,38 +143,32 @@
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
             
             // --- 1. Vẽ các Vùng ---
-            
-            // Vùng Vàng (AC-3/4) - Vẽ toàn bộ trước
-            ctx.fillStyle = '#f0e68c'; // Màu vàng nhạt
+            ctx.fillStyle = '#f0e68c'; // Vùng Vàng (AC-3/4)
             ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-            // Vùng Xanh (AC-2) - Vẽ đè lên
-            ctx.fillStyle = '#90ee90'; // Màu xanh lá
+            // Vùng Xanh (AC-2)
+            ctx.fillStyle = '#90ee90'; 
             ctx.beginPath();
-            // Tìm điểm giao của đường biên với trục Y (T_MAX)
-            // 4 = -1.7 * logI + 5 => logI = 1/1.7 = 0.588 => I = 3.87 mA
             const topBoundaryI = Math.pow(10, (LOG_T_MAX - BOUNDARY_INTERCEPT) / BOUNDARY_SLOPE);
-            // Tìm điểm giao của đường biên với trục X (T_MIN)
-            // 0 = -1.7 * logI + 5 => logI = 5/1.7 = 2.94 => I = 870 mA
             const bottomBoundaryI = Math.pow(10, (LOG_T_MIN - BOUNDARY_INTERCEPT) / BOUNDARY_SLOPE);
-
-            ctx.moveTo(mapLogX(AC1_LIMIT_MA), mapLogY(T_MAX_MS)); // Góc trên trái (của AC-2)
-            ctx.lineTo(mapLogX(AC1_LIMIT_MA), mapLogY(T_MIN_MS)); // Góc dưới trái
-            ctx.lineTo(mapLogX(bottomBoundaryI), mapLogY(T_MIN_MS)); // Góc dưới phải (theo đường biên)
-            ctx.lineTo(mapLogX(topBoundaryI), mapLogY(T_MAX_MS)); // Góc trên phải (theo đường biên)
+            ctx.moveTo(mapLogX(AC1_LIMIT_MA), mapLogY(T_MAX_MS));
+            ctx.lineTo(mapLogX(AC1_LIMIT_MA), mapLogY(T_MIN_MS));
+            ctx.lineTo(mapLogX(bottomBoundaryI), mapLogY(T_MIN_MS));
+            ctx.lineTo(mapLogX(topBoundaryI), mapLogY(T_MAX_MS));
             ctx.closePath();
             ctx.fill();
 
-            // Vùng Xanh nhạt (AC-1) - Vẽ đè lên
-            ctx.fillStyle = '#a0d8f0'; // Màu xanh nhạt
+            // Vùng Xanh nhạt (AC-1)
+            ctx.fillStyle = '#a0d8f0'; 
             ctx.fillRect(0, 0, mapLogX(AC1_LIMIT_MA), canvasHeight);
 
             // --- 2. Vẽ Lưới Logarit ---
+            // Tăng kích thước font một chút cho rõ nét hơn trên buffer lớn
             ctx.strokeStyle = '#ddd';
             ctx.fillStyle = '#555';
-            ctx.font = '10px Inter';
+            ctx.font = '20px Inter'; // Tăng font size (vì buffer là 1000x1000)
             ctx.lineWidth = 1;
-            ctx.setLineDash([2, 3]);
+            ctx.setLineDash([4, 6]); // Tăng dash cho dễ nhìn
 
             // Lưới trục I (Dọc)
             const iLabels = [
@@ -166,7 +183,8 @@
                 ctx.moveTo(x, 0);
                 ctx.lineTo(x, canvasHeight);
                 ctx.stroke();
-                ctx.fillText(label.text, x + 3, canvasHeight - 5);
+                // Điều chỉnh vị trí text cho font lớn hơn
+                ctx.fillText(label.text, x + 5, canvasHeight - 10);
             });
 
             // Lưới trục T (Ngang)
@@ -181,14 +199,14 @@
                 ctx.moveTo(0, y);
                 ctx.lineTo(canvasWidth, y);
                 ctx.stroke();
-                ctx.fillText(label.text, 5, y - 3);
+                ctx.fillText(label.text, 5, y - 5);
             });
             
             ctx.setLineDash([]); // Reset dash
 
             // --- 3. Vẽ Đường biên AC-2/AC-3 ---
             ctx.strokeStyle = 'green';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 6; // Tăng độ dày cho dễ thấy
             ctx.beginPath();
             ctx.moveTo(mapLogX(bottomBoundaryI), mapLogY(T_MIN_MS));
             ctx.lineTo(mapLogX(topBoundaryI), mapLogY(T_MAX_MS));
@@ -200,7 +218,7 @@
                 const y = mapLogY(point.t_ms);
 
                 ctx.strokeStyle = '#ff0000'; // Màu đỏ
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 4; // Tăng độ dày
                 
                 // Đường gióng ngang
                 ctx.beginPath();
@@ -215,17 +233,18 @@
                 ctx.stroke();
 
                 // Dấu X tại điểm
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 8; // Tăng độ dày
+                const crossSize = 12; // Tăng kích thước
                 ctx.beginPath();
-                ctx.moveTo(x - 6, y - 6);
-                ctx.lineTo(x + 6, y + 6);
-                ctx.moveTo(x - 6, y + 6);
-                ctx.lineTo(x + 6, y - 6);
+                ctx.moveTo(x - crossSize, y - crossSize);
+                ctx.lineTo(x + crossSize, y + crossSize);
+                ctx.moveTo(x - crossSize, y + crossSize);
+                ctx.lineTo(x + crossSize, y - crossSize);
                 ctx.stroke();
             }
         }
 
-        // Hàm kiểm tra vùng
+        // Hàm kiểm tra vùng - không đổi logic
         function checkZone(i_mA, t_ms) {
             if (i_mA < AC1_LIMIT_MA) {
                 return { 
@@ -238,28 +257,16 @@
             const log_I = Math.log10(i_mA);
             const log_T_input = Math.log10(t_ms);
             
-            // Tính giá trị T trên đường biên tại dòng điện I
             const log_T_boundary = (BOUNDARY_SLOPE * log_I) + BOUNDARY_INTERCEPT;
 
             if (log_T_input < log_T_boundary) {
-                // Phía dưới/bên trái đường biên
                 return { 
                     zone: 'AC-2', 
                     className: 'zone-green', 
                     text: 'VÙNG XANH (AC-2 - An toàn)' 
                 };
             } else {
-                // Phía trên/bên phải đường biên
-                // Trong biểu đồ gốc, đây là AC-3 và AC-4
-                // Theo yêu cầu của bạn, chúng ta gọi nó là "vàng"
-                
-                // Chúng ta có thể thêm logic cho AC-4 nếu muốn, nhưng hãy giữ nó đơn giản
-                // Dựa trên biểu đồ, đường biên AC-3/AC-4.1
-                // P1(100mA, 1000ms), P2(500mA, 30ms)
-                // m = (log(30)-log(1000)) / (log(500)-log(100)) = (1.48 - 3) / (2.7 - 2) = -1.52 / 0.7 = -2.17
-                // c = 3 - 2*(-2.17) = 7.34
                 const log_T_boundary_AC3_4 = -2.17 * log_I + 7.34;
-
                 if(log_T_input < log_T_boundary_AC3_4) {
                     return { 
                         zone: 'AC-3', 
@@ -276,7 +283,7 @@
             }
         }
 
-        // Hàm xử lý chính
+        // Hàm xử lý chính - không đổi logic
         function handleCheck() {
             const current = parseFloat(document.getElementById('current').value);
             const currentUnit = document.getElementById('currentUnit').value;
@@ -291,7 +298,6 @@
                 return;
             }
 
-            // Chuẩn hóa giá trị về mA và ms
             let i_mA = current;
             if (currentUnit === 'uA') i_mA = current / 1000;
             if (currentUnit === 'A') i_mA = current * 1000;
@@ -299,14 +305,11 @@
             let t_ms = time;
             if (timeUnit === 's') t_ms = time * 1000;
 
-            // Kiểm tra vùng
             const result = checkZone(i_mA, t_ms);
 
-            // Cập nhật UI
             resultDiv.textContent = result.text;
             resultDiv.className = `text-center p-4 rounded-lg text-xl sm:text-2xl font-bold transition-all duration-300 ${result.className}`;
 
-            // Vẽ lại biểu đồ với điểm
             drawGraph({ i_mA, t_ms });
         }
 
@@ -315,12 +318,19 @@
 
         // Vẽ biểu đồ lần đầu khi tải trang
         window.addEventListener('load', () => {
-            drawGraph(null);
-            // Tự động chạy kiểm tra với giá trị mặc định
-            handleCheck();
+            // Thêm một chút delay để đảm bảo font đã tải (hoặc layout ổn định)
+            setTimeout(() => {
+                drawGraph(null);
+                handleCheck(); // Tự động chạy với giá trị mặc định
+            }, 100); 
         });
+
+        // Thêm sự kiện resize để vẽ lại biểu đồ (tùy chọn, nhưng tốt)
+        // Lưu ý: Việc này chỉ cần thiết nếu kích thước buffer thay đổi
+        // Vì chúng ta dùng CSS để scale, nên thực ra là không cần
+        // Nhưng nếu sau này bạn muốn_resize_ buffer, bạn sẽ cần nó.
+        // window.addEventListener('resize', handleCheck); // Bỏ comment nếu muốn vẽ lại khi resize
 
     </script>
 </body>
 </html>
-
